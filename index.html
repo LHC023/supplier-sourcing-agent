@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>供应商自动寻源 Agent · 物料/专业分包/劳务分包 跨行业比价系统</title>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16222e; --panel2:#1c2c3a; --line:#2b3f52;
+    --txt:#e6eef5; --muted:#8aa0b4; --accent:#2f9e6f; --accent2:#3b82f6;
+    --gold:#e0a83b; --red:#e05a4b; --chip:#223547;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Microsoft YaHei","PingFang SC",system-ui,Arial,sans-serif;
+    background:linear-gradient(160deg,#0f1720,#131f2b);color:var(--txt);font-size:14px;line-height:1.55}
+  header{padding:18px 24px;border-bottom:1px solid var(--line);background:rgba(0,0,0,.15)}
+  header h1{margin:0;font-size:20px;display:flex;align-items:center;gap:10px}
+  header .sub{color:var(--muted);font-size:12.5px;margin-top:5px}
+  .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;background:var(--chip);color:var(--muted);border:1px solid var(--line)}
+  .tabs{display:flex;gap:6px;padding:14px 24px 0;flex-wrap:wrap}
+  .tab{padding:11px 18px;border:1px solid var(--line);border-bottom:none;border-radius:10px 10px 0 0;
+    background:var(--panel);cursor:pointer;color:var(--muted);font-weight:600;transition:.15s;user-select:none}
+  .tab:hover{color:var(--txt)}
+  .tab.active{background:var(--panel2);color:#fff;border-color:var(--accent)}
+  .tab .ic{margin-right:6px}
+  .wrap{padding:0 24px 40px}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:0 12px 12px 12px;padding:18px}
+  .row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:12px;color:var(--muted);font-weight:600}
+  input,select,textarea{background:#0e1a24;border:1px solid var(--line);color:var(--txt);
+    padding:9px 11px;border-radius:8px;font-size:14px;font-family:inherit;outline:none}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent2)}
+  input[type=text],textarea{min-width:280px;flex:1}
+  .grow{flex:1;min-width:240px}
+  button{background:var(--accent);color:#fff;border:none;padding:10px 16px;border-radius:8px;
+    font-size:14px;font-weight:600;cursor:pointer;transition:.15s;font-family:inherit}
+  button:hover{filter:brightness(1.1)}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--txt)}
+  button.blue{background:var(--accent2)}
+  button.gold{background:var(--gold);color:#241a04}
+  .cats{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .cat{font-size:12px;padding:5px 10px;border:1px solid var(--line);border-radius:20px;cursor:pointer;background:var(--chip);color:var(--muted)}
+  .cat.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .muted{color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted);margin:8px 0 0}
+  .modebar{display:flex;gap:10px;align-items:center;margin:14px 0;padding:10px 12px;background:#0e1a24;border:1px dashed var(--line);border-radius:8px;font-size:12.5px}
+  .switch{position:relative;display:inline-flex;border:1px solid var(--line);border-radius:20px;overflow:hidden}
+  .switch span{padding:5px 12px;cursor:pointer;font-size:12px;color:var(--muted)}
+  .switch span.on{background:var(--accent2);color:#fff}
+  table{width:100%;border-collapse:collapse;margin-top:6px;font-size:13px}
+  th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;white-space:nowrap}
+  th{background:#0e1a24;color:var(--muted);font-weight:600;position:sticky;top:0;font-size:12px}
+  tbody tr:hover{background:rgba(59,130,246,.08)}
+  tr.best{background:rgba(47,158,111,.12)}
+  .tbl-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin-top:14px;max-height:560px;overflow-y:auto}
+  .rank{display:inline-flex;width:26px;height:26px;border-radius:50%;align-items:center;justify-content:center;font-weight:700}
+  .r1{background:var(--gold);color:#241a04}.r2{background:#c7ccd1;color:#22282d}.r3{background:#cd7f32;color:#fff}
+  .rr{background:var(--chip);color:var(--muted)}
+  .score-pill{display:inline-block;min-width:52px;text-align:center;padding:2px 8px;border-radius:20px;font-weight:700;font-size:12.5px}
+  .s-hi{background:rgba(47,158,111,.25);color:#7ee0b0;border:1px solid #2f9e6f}
+  .s-md{background:rgba(224,168,59,.2);color:#f0c877;border:1px solid #7a5c1e}
+  .s-lo{background:rgba(224,90,75,.18);color:#f0a99f;border:1px solid #7a332b}
+  .qual{font-size:11.5px;padding:1px 7px;border-radius:5px;background:var(--chip);border:1px solid var(--line)}
+  .q特级{color:#ffd36b;border-color:#7a5c1e}.q一级{color:#7ee0b0}.q二级{color:#8fc4f5}.q三级{color:var(--muted)}
+  .src a{color:var(--accent2);text-decoration:none;font-size:12px}
+  .price-basis{font-size:11.5px;color:var(--muted);white-space:normal;max-width:230px}
+  .contact{font-size:12px;white-space:normal;max-width:170px}
+  .star{color:var(--gold)}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center}
+  .summary{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;font-size:13px}
+  .summary b{color:var(--txt)}
+  .stat{background:#0e1a24;border:1px solid var(--line);border-radius:10px;padding:10px 16px}
+  .stat .n{font-size:20px;font-weight:700}
+  .stat .l{font-size:11.5px;color:var(--muted)}
+  .empty{padding:40px;text-align:center;color:var(--muted)}
+  dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel2);color:var(--txt);max-width:720px;width:92%}
+  dialog::backdrop{background:rgba(0,0,0,.6)}
+  dialog h3{margin:0 0 10px}
+  dialog pre{background:#0e1a24;border:1px solid var(--line);border-radius:8px;padding:12px;white-space:pre-wrap;font-size:12.5px;max-height:340px;overflow:auto}
+  dialog .dlg-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+  footer{padding:16px 24px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);text-align:center}
+  .flag{font-size:15px}
+  .loading{color:var(--accent2)}
+  @media(max-width:640px){.field,input[type=text],textarea{min-width:100%}.row{flex-direction:column;align-items:stretch}}
+</style>
+</head>
+<body>
+<div id="appShell">
+<header>
+  <h1>🧭 供应商自动寻源 Agent <span class="badge">原型 v2 · 三套子系统统一比价</span></h1>
+  <div class="sub">物料 / 专业分包 / 劳务分包三套寻源 · 22 个行业场景 · 21 国 · 工程版/制造版/贸易版三套评分模板 · 国别显式指定（IP 仅提示）· ≥3 家同类比价 · 数据可追溯 · CSV 一键导出</div>
+</header>
+
+<div class="tabs" id="tabs"></div>
+
+<div class="wrap">
+  <div class="card">
+
+    <div class="row">
+      <div class="field grow">
+        <label id="qLabel">输入商品名称 / 上传规格图片（物料寻源）</label>
+        <input type="text" id="query" placeholder="例如：Q235B 热轧 H 型钢 400×200 / 4.1 消防报警主机 / C30 商品混凝土浇筑" onkeydown="if(event.key==='Enter')runSearch()">
+      </div>
+      <div class="field">
+        <label>或 上传图片</label>
+        <input type="file" id="img" accept="image/*" style="max-width:220px">
+      </div>
+    </div>
+
+    <div class="field" style="margin-top:12px">
+      <label>所属行业大类（物料寻源可多选，决定检索范围）</label>
+      <div class="cats" id="industryCats"></div>
+    </div>
+
+    <div class="field" id="subcatWrap" style="margin-top:10px">
+      <label id="subcatLabel">专业分包类别（16 类）</label>
+      <div class="cats" id="subCats"></div>
+    </div>
+
+    <div class="row" style="margin-top:14px">
+      <div class="field"><label>目标区域</label><input type="text" id="region" value="华东 / 江苏" style="min-width:150px"></div>
+      <div class="field"><label>比价家数（≥3）</label><input type="number" id="minCount" value="5" min="3" max="12" style="width:90px"></div>
+      <div class="field" id="priceUnitField"><label>计价单位</label>
+        <select id="priceUnit"><option>元/吨</option><option>元/件</option><option>元/套</option><option>元/个</option><option>元/顶</option><option>元/台</option><option>元/箱</option><option>元/m</option><option>元/㎡</option><option>元/m³</option></select>
+      </div>
+      <div class="field"><label>采购/施工国别（必选）</label>
+        <select id="country" style="min-width:150px"></select>
+      </div>
+      <div class="field"><label>评分模板</label>
+        <select id="template" onchange="state.template=this.value; if(state.lastRows.length) render(computeValue(state.lastRows))" style="min-width:120px">
+          <option>工程版</option><option>制造版</option><option>贸易版</option>
+        </select>
+      </div>
+      <div class="field"><label>&nbsp;</label><button class="blue" onclick="runSearch()">🔎 自动寻源比价</button></div>
+    </div>
+
+    <div class="modebar">
+      <b>数据模式：</b>
+      <div class="switch" id="modeSwitch">
+        <span data-m="demo" class="on">🟢 样例演示数据</span>
+        <span data-m="web">🌐 联网检索（真实源）</span>
+      </div>
+      <span class="muted" id="modeNote">样例模式：用真实感供应商库完整演示「≥3 家同类匹配 → 性价比评分 → 可追溯 → CSV」全流程，接口已预留给真实数据源。</span>
+      <span style="margin-left:auto" class="muted" id="countryStatus">请显式选择国别；IP 仅作提示，不作依据</span>
+    </div>
+
+    <div id="result"></div>
+  </div>
+</div>
+
+<footer>
+  原型说明：本工具为可运行前端，样例数据用于验证寻源与比价逻辑，<b>非真实报价</b>；切换到「联网检索」并点击「生成检索指令」可将结构化寻源任务交给具备联网能力的 Agent 执行，再把结果 JSON 回填，即得可追溯的真实比价。<br>
+  ⚠️ 涉及金额、资质、业绩、联系方式的正式采购决策务必以人工核验的资质原件、合同、招投标公示、报价单为准。
+</footer>
+
+<!-- 检索指令弹窗 -->
+<dialog id="cmdDlg">
+  <h3>🌐 联网检索指令（复制给具备联网/浏览器能力的 Agent）</h3>
+  <p class="muted" style="font-size:12.5px">把下面这段发给 QoderWork（或联网 Agent），它会去招投标 / 造价 / 企业工商 / 行业平台检索真实供应商，并按本系统寻源字段产出 JSON。回填后即可得到可追溯的真实比价。</p>
+  <pre id="cmdText"></pre>
+  <div class="dlg-actions">
+    <button class="ghost" onclick="copyCmd()">📋 复制指令</button>
+    <button onclick="cmdDlg.close()">关闭</button>
+  </div>
+</dialog>
+
+<!-- 结果回填弹窗 -->
+<dialog id="importDlg">
+  <h3>📥 回填真实检索结果（JSON 数组）</h3>
+  <p class="muted" style="font-size:12.5px">粘贴 Agent 返回的 JSON 数组，字段：name,country,unitPrice,priceUnit,duration,qualification,similarProjects,region,score,contact,source,priceBasis。系统会自动重算性价比排名并覆盖当前结果。</p>
+  <textarea id="importText" rows="10" style="width:100%" placeholder='[{"name":"XX重工","country":"中国","unitPrice":4680,"priceUnit":"元/吨","duration":25,"qualification":"一级","similarProjects":18,"region":"江苏","score":91,"contact":"1390000****","source":"1688工业品/企业工商","priceBasis":"2026Q2钢厂挂牌价+加工费"}]'></textarea>
+  <div class="dlg-actions">
+    <button class="ghost" onclick="importDlg.close()">取消</button>
+    <button class="blue" onclick="applyImport()">导入并重新排名</button>
+  </div>
+</dialog>
+
+</div>
+<div id="paywall" style="display:none">
+  <div class="pw-card">
+    <h2>供应商自动寻源 + 询价 Agent</h2>
+    <p class="pw-sub">付费授权使用 · 授权价 <b id="pwPrice">—</b> · 一次付费长期使用</p>
+    <img class="pw-qr" src="pay_wechat.jpg" alt="微信收款码">
+    <ol class="pw-steps">
+      <li>扫码付款，备注「寻源Agent + 你的称呼」；</li>
+      <li>把付款截图发给作者，作者回你一个授权码；</li>
+      <li>在下方填入授权码点「激活」，即可解锁全部寻源与比价功能。</li>
+    </ol>
+    <input id="pwCode" autocomplete="off" spellcheck="false" placeholder="授权码，形如 SA-AB12-CD34">
+    <button id="pwBtn" type="button">激活</button>
+    <p id="pwMsg" class="pw-msg"></p>
+    <p class="pw-fine">本站为静态演示版：授权码在本机校验，不提供远程解绑。</p>
+  </div>
+</div>
+<style>
+#paywall{position:fixed;inset:0;z-index:99;display:flex;align-items:center;justify-content:center;overflow:auto;background:rgba(9,20,32,.92);padding:16px}
+.pw-card{background:#fff;border-radius:14px;max-width:400px;width:100%;margin:auto;padding:20px 22px;box-shadow:0 18px 48px rgba(0,0,0,.35);font-family:system-ui,"Microsoft YaHei",sans-serif;color:#1f2937}
+.pw-card h2{margin:0 0 4px;font-size:19px}
+.pw-sub{margin:0 0 12px;font-size:13px;color:#475569}
+.pw-qr{display:block;width:100%;max-width:210px;margin:0 auto 12px;border:1px solid #e2e8f0;border-radius:10px}
+.pw-steps{margin:0 0 12px;padding-left:18px;font-size:13px;line-height:1.6;color:#334155}
+#pwCode{width:100%;box-sizing:border-box;padding:10px 12px;font-size:15px;letter-spacing:1px;border:1px solid #cbd5e1;border-radius:8px}
+#pwBtn{width:100%;margin-top:10px;padding:11px;font-size:15px;font-weight:600;color:#fff;background:#0f766e;border:0;border-radius:8px;cursor:pointer}
+#pwBtn:hover{background:#0d5f58}
+.pw-msg{min-height:20px;margin:10px 0 0;font-size:13px;color:#b91c1c}
+.pw-fine{margin:8px 0 0;font-size:11px;color:#94a3b8}
+#appShell{transition:filter .2s}
+</style>
+<script src="gate.js"></script>
+
+</body>
+</html>
