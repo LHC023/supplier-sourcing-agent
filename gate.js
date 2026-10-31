@@ -1,98 +1,125 @@
-// 静态门禁：GitHub Pages 没有函数后端，校验改在浏览器内完成。
-// 只存 SHA-256(盐 + 授权码)，明文授权码不出现在源码里。
+// 付费墙：所有授权判定都走 Cloudflare Worker，页面不内置任何可用口令。
 (function () {
+  const API = 'https://sa-license-api.lhc023.workers.dev';
   const PRICE_TEXT = '¥99 / 年';
   const CODE_KEY = 'sa_license_code';
-  const HASHES = [
-    "e22540dca9997e3df6ae4589448edbf521a4e6d9eea1b0b119b63c4e4702d5b2",
-    "b08c99d2bb29839f657bd09fce4830991858c8bfa639dbe13e0ee6c8c56f4d05",
-    "292dc86d249b8ee85a2b7b4e66b7a6a38b3904fe2b69b285514de09090b45a32",
-    "80103459027fcf650195b270cf647ae207244cc97f5c72220c093655032ed021",
-    "1520a60103844843c976eb7c88f4ab073c49a49846f183e3aa4512323adceda6",
-    "8815281b508580c39a7d00bd09eb315a05f852c9e11ede01ba5d2bc29cd9f1e0",
-    "c61aac28c1a0dee9a04d6f61da085654acad26bf43be9ea675e60f8e494e1e1f",
-    "d94c5b249c95b4b8332535d24060b39bdf5c766f19852798503c6e566eb7c36f",
-    "81847fd5df54448906044d8a47d8b8cd785290070a71bdbd93625a3fbc7e936a",
-    "d5e48022950e53687b0e3e8743296cd9e056c76f5a396862a12071191ed32012",
-    "3eb094ec2f97c05839b43575079fbb9097ef2a236945197cec2708468fcd0bf2",
-    "5e4bc211577291fa141871b9d236dcb884176829d43053c63916ae840d86e488",
-    "c5a97de5ec667416381296347648da35617cb19c177413e57a04b3bd0459b84d",
-    "82b996637ea9db5880a4f910614c224cb579388cd427dbaff9ec5b81a1f3e1f8",
-    "e6793a77578c172b09d2022c13eb063cf40c78e64f6bd3460c4498aeae6a7274",
-    "dfd453ff5b0a628acb2a6c61b01901fb3483c48fd6d1b1786b07e0c5ee333279",
-    "9f944703e78db06a8dffecd5549169a8fb49095cd95502e44582783f500b9bcb",
-    "15b7afe032f59ed5942a3335bc767b5acbdf6f267bf1e3d984efd87bf5091e06",
-    "1c0bf2922bccdba5a853b83ddc1227a2ed8743b0da312a98a77d3452d4a7c86e",
-    "9058fd76dccb6750e971ab092ac2ec86892f92ee7df513b6f9ceb3d44f6a05de"
-  ];
+  const DEVICE_KEY = 'sa_device_id';
 
   const el = id => document.getElementById(id);
+  const enc = encodeURIComponent;
 
-  async function digest(code) {
-    const bytes = new TextEncoder().encode('sa-gate-2026' + code);
-    const sum = await crypto.subtle.digest('SHA-256', bytes);
-    return Array.from(new Uint8Array(sum), b => b.toString(16).padStart(2, '0')).join('');
+  function deviceId() {
+    let id = localStorage.getItem(DEVICE_KEY);
+    if (!id) {
+      id = (crypto.randomUUID && crypto.randomUUID()) ||
+        ('d' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
+      localStorage.setItem(DEVICE_KEY, id);
+    }
+    return id;
   }
 
   const TIPS = {
-    empty: '请先填入授权码。',
-    invalid: '授权码无效或已作废，请核对后重试（区分 O/0 与 I/1）。',
-    config: '配置文件读取失败，请刷新页面重试。',
+    license_not_found: '没有这个授权码，请核对后重试（区分 O/0 与 I/1）。',
+    license_revoked: '该授权码已被停用，请联系作者。',
+    license_expired: '该授权码已到期，续费后即可继续使用。',
+    seats_full: '授权席位已满，请先联系作者解绑旧设备。',
+    device_not_activated: '此设备尚未激活，请在下方填入授权码后点「激活」。',
+    invalid_code_format: '授权码格式不对，应形如 SA-AB12-CD34。',
+    invalid_device_id: '本机标识异常，请清理浏览器站点数据后重试。',
+    admin_not_configured: '发放服务未配置，请联系作者。',
+    network_error: '连不上授权服务，请检查网络后重试。',
+    invalid_response: '授权服务返回了无法识别的结果，请稍后重试。',
   };
+  const tip = code => TIPS[code] || '暂时无法完成验证，请稍后重试。';
 
+  async function api(path, init) {
+    let response;
+    try {
+      response = await fetch(API + path, Object.assign({ credentials: 'omit' }, init || {}));
+    } catch (e) {
+      throw Object.assign(new Error('network'), { code: 'network_error' });
+    }
+    let body;
+    try { body = await response.json(); } catch (e) {
+      throw Object.assign(new Error('bad json'), { code: 'invalid_response' });
+    }
+    if (!response.ok || body.ok !== true) {
+      throw Object.assign(new Error(body.error || 'request_failed'), { code: body.error || 'http_' + response.status });
+    }
+    return body;
+  }
+
+  let unlocked = false;
   function showPay(message) {
+    if (unlocked) return;
     el('paywall').style.display = 'flex';
     el('appShell').style.filter = 'blur(14px)';
     el('appShell').setAttribute('aria-hidden', 'true');
     el('pwMsg').textContent = message || '';
   }
-
   function hidePay() {
+    unlocked = true;
     el('paywall').style.display = 'none';
     el('appShell').style.filter = '';
     el('appShell').removeAttribute('aria-hidden');
   }
 
-  async function unlock(code) {
-    const catalog = await fetch('catalog.json').then(r => {
-      if (!r.ok) throw Object.assign(new Error('config'), { tip: 'config' });
-      return r.json();
-    });
-    hidePay();
-    window.CFG = catalog;
+  function runApp(config) {
+    window.CFG = config;
     const script = document.createElement('script');
     script.src = 'app.js';
     document.body.appendChild(script);
   }
 
-  async function tryCode(raw) {
-    const code = (raw || '').trim().toUpperCase();
-    if (!code) return showPay(TIPS.empty);
-    if (!/^SA-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code)) return showPay(TIPS.invalid);
-    el('pwMsg').textContent = '正在验证…';
-    const sum = await digest(code);
-    if (!HASHES.includes(sum)) {
-      localStorage.removeItem(CODE_KEY);
-      return showPay(TIPS.invalid);
-    }
-    localStorage.setItem(CODE_KEY, code);
-    try {
-      await unlock(code);
-    } catch (error) {
-      showPay(TIPS[error.tip] || TIPS.config);
-    }
+  async function loadApp(code) {
+    const query = '?code=' + enc(code) + '&device=' + enc(deviceId());
+    const catalog = await api('/api/catalog' + query);
+    hidePay();
+    runApp(catalog.config);
   }
 
-  function boot() {
+  async function boot() {
     el('pwPrice').textContent = PRICE_TEXT;
-    const saved = localStorage.getItem(CODE_KEY);
-    if (saved) tryCode(saved); else showPay('');
+    const code = (localStorage.getItem(CODE_KEY) || '').trim();
+    if (!code) { showPay(''); return; }
+    try {
+      const access = await api('/api/access?code=' + enc(code) + '&device=' + enc(deviceId()));
+      if (!access.activated) {
+        showPay('授权码有效，但此设备还没有激活，请点「激活」。');
+        return;
+      }
+      await loadApp(code);
+    } catch (e) {
+      if (['license_revoked', 'license_expired', 'license_not_found'].includes(e.code)) {
+        localStorage.removeItem(CODE_KEY);
+      }
+      showPay(tip(e.code));
+    }
   }
 
-  window.__paywall = { boot, activate: () => tryCode(el('pwCode').value) };
-  document.addEventListener('DOMContentLoaded', () => {
-    el('pwBtn').addEventListener('click', window.__paywall.activate);
-    el('pwCode').addEventListener('keydown', e => { if (e.key === 'Enter') window.__paywall.activate(); });
+  async function activate() {
+    const code = (el('pwCode').value || '').trim().toUpperCase();
+    if (!code) { el('pwMsg').textContent = '请先填入授权码。'; return; }
+    el('pwMsg').textContent = '正在验证…';
+    try {
+      await api('/api/activate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ code: code, device_id: deviceId() }),
+      });
+      localStorage.setItem(CODE_KEY, code);
+      await loadApp(code);
+    } catch (e) {
+      el('pwMsg').textContent = tip(e.code);
+    }
+  }
+
+  window.__paywall = { boot: boot, activate: activate };
+  document.addEventListener('DOMContentLoaded', function () {
+    el('pwBtn').addEventListener('click', activate);
+    el('pwCode').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') activate();
+    });
     boot();
   });
 })();
