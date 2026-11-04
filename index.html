@@ -181,12 +181,16 @@
   <div class="pw-card">
     <h2>供应商自动寻源 + 询价 Agent</h2>
     <p class="pw-sub">付费授权使用 · 授权价 <b id="pwPrice">—</b> · 按年授权，一个授权码 3 台设备</p>
-    <img class="pw-qr" src="pay_wechat.jpg" alt="微信收款码">
-    <ol class="pw-steps">
-      <li>扫码付款，备注「寻源Agent + 你的称呼」；</li>
-      <li>把付款截图发给作者，作者回你一个授权码；</li>
-      <li>在下方填入授权码点「激活」，即可解锁全部寻源与比价功能。</li>
-    </ol>
+    <button id="pwPay" type="button" class="pw-pay">支付宝付款 · 付完自动发授权码</button>
+    <details class="pw-alt">
+      <summary>不方便在线付款？看人工方式</summary>
+      <img class="pw-qr" src="pay_wechat.jpg" alt="微信收款码">
+      <ol class="pw-steps">
+        <li>扫码付款，备注「寻源Agent + 你的称呼」；</li>
+        <li>把付款截图发给作者，作者回你一个授权码；</li>
+        <li>在下方填入授权码点「激活」，即可解锁全部寻源与比价功能。</li>
+      </ol>
+    </details>
     <input id="pwCode" autocomplete="off" spellcheck="false" placeholder="授权码，形如 SA-AB12-CD34">
     <button id="pwBtn" type="button">激活</button>
     <p id="pwMsg" class="pw-msg"></p>
@@ -198,7 +202,12 @@
 .pw-card{background:#fff;border-radius:14px;max-width:400px;width:100%;margin:auto;padding:20px 22px;box-shadow:0 18px 48px rgba(0,0,0,.35);font-family:system-ui,"Microsoft YaHei",sans-serif;color:#1f2937}
 .pw-card h2{margin:0 0 4px;font-size:19px}
 .pw-sub{margin:0 0 12px;font-size:13px;color:#475569}
-.pw-qr{display:block;width:100%;max-width:210px;margin:0 auto 12px;border:1px solid #e2e8f0;border-radius:10px}
+.pw-qr{display:block;width:100%;max-width:210px;margin:12px auto;border:1px solid #e2e8f0;border-radius:10px}
+.pw-pay{width:100%;padding:12px;font-size:15px;font-weight:600;color:#fff;background:#1677ff;border:0;border-radius:8px;cursor:pointer}
+.pw-pay:hover{background:#0f5fd8}
+.pw-pay[disabled]{background:#94a3b8;cursor:progress}
+.pw-alt{margin-top:10px;font-size:13px;color:#475569}
+.pw-alt summary{cursor:pointer;padding:6px 0}
 .pw-steps{margin:0 0 12px;padding-left:18px;font-size:13px;line-height:1.6;color:#334155}
 #pwCode{width:100%;box-sizing:border-box;padding:10px 12px;font-size:15px;letter-spacing:1px;border:1px solid #cbd5e1;border-radius:8px}
 #pwBtn{width:100%;margin-top:10px;padding:11px;font-size:15px;font-weight:600;color:#fff;background:#0f766e;border:0;border-radius:8px;cursor:pointer}

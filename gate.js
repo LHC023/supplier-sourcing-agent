@@ -27,6 +27,10 @@
     invalid_code_format: '授权码格式不对，应形如 SA-AB12-CD34。',
     invalid_device_id: '本机标识异常，请清理浏览器站点数据后重试。',
     admin_not_configured: '发放服务未配置，请联系作者。',
+    pay_not_configured: '在线收款暂未开通，请先使用人工方式购买。',
+    pay_seller_unconfigured: '在线收款配置不完整，请先使用人工方式购买。',
+    pay_form_missing: '没有取到支付页面，请稍后重试或改用人工方式。',
+    too_many_orders: '发起付款过于频繁，请稍后再试。',
     network_error: '连不上授权服务，请检查网络后重试。',
     invalid_response: '授权服务返回了无法识别的结果，请稍后重试。',
   };
@@ -78,8 +82,23 @@
     runApp(catalog.config);
   }
 
+  // 收款是否可用只取决于服务端密钥是否配齐；未配齐时不给买家留一个点了就报错的按钮。
+  async function gatePayButton() {
+    try {
+      const health = await api('/api/health');
+      if (health.pay === true) return;
+    } catch (e) {
+      return; // 探测本身失败时保留按钮，点击后仍会有明确提示
+    }
+    const btn = el('pwPay');
+    if (btn) btn.remove();
+    const alt = document.querySelector('.pw-alt');
+    if (alt) alt.open = true;
+  }
+
   async function boot() {
     el('pwPrice').textContent = PRICE_TEXT;
+    gatePayButton();
     const code = (localStorage.getItem(CODE_KEY) || '').trim();
     if (!code) { showPay(''); return; }
     try {
@@ -114,9 +133,42 @@
     }
   }
 
-  window.__paywall = { boot: boot, activate: activate };
+  // 支付宝下单返回的是 HTML <form>，必须渲染后自动提交；直接当 URL 跳只会看到一堆参数。
+  function submitAlipayForm(html) {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#fff';
+    box.innerHTML = html;
+    document.body.appendChild(box);
+    const form = box.querySelector('form');
+    if (!form) {
+      box.remove();
+      throw Object.assign(new Error('pay form missing'), { code: 'pay_form_missing' });
+    }
+    form.submit();
+  }
+
+  async function payNow() {
+    const btn = el('pwPay');
+    if (btn) btn.disabled = true;
+    el('pwMsg').textContent = '正在发起支付宝付款…';
+    try {
+      const order = await api('/api/pay/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ item: 'standard' }),
+      });
+      submitAlipayForm(order.payment_html);
+    } catch (e) {
+      el('pwMsg').textContent = tip(e.code);
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  window.__paywall = { boot: boot, activate: activate, payNow: payNow };
   document.addEventListener('DOMContentLoaded', function () {
     el('pwBtn').addEventListener('click', activate);
+    const payBtn = el('pwPay');
+    if (payBtn) payBtn.addEventListener('click', payNow);
     el('pwCode').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') activate();
     });
