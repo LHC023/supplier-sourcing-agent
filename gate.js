@@ -33,6 +33,7 @@
     admin_not_configured: '发放服务未配置，请联系作者。',
     pay_not_configured: '在线收款暂未开通，请先使用人工方式购买。',
     pay_seller_unconfigured: '在线收款配置不完整，请先使用人工方式购买。',
+    pay_amount_over_cap: '当前收款额度收不了这个价，请先用下方联系方式人工购买。',
     pay_form_missing: '没有取到支付页面，请稍后重试或改用人工方式。',
     too_many_orders: '发起付款过于频繁，请稍后再试。',
     network_error: '连不上授权服务，请检查网络后重试。',
@@ -102,8 +103,12 @@
   async function gatePayButton() {
     try {
       const health = await api('/api/health');
-      if (health.pay === true) return;
-      lockToManual('在线收款暂未开通 · 用下方联系方式人工购买');
+      // 密钥配齐但商品价超出商户单笔额度，同样属于「现在线上收不了」——
+      // 老版本后端不返回 pay_amount_ok，undefined 按放行处理
+      if (health.pay === true && health.pay_amount_ok !== false) return;
+      lockToManual(health.pay_amount_ok === false
+        ? '当前收款额度收不了 ¥99 · 用下方联系方式人工购买'
+        : '在线收款暂未开通 · 用下方联系方式人工购买');
     } catch (e) {
       if (e.code === 'network_error') lockToManual('连不上授权服务 · 用下方联系方式人工购买');
       // 其余是服务端明确报错：保留按钮，点击后仍会有逐项提示
