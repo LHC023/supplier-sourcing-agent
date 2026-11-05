@@ -88,22 +88,26 @@
 
   // 收款是否可用只取决于服务端密钥是否配齐。未配齐时不藏按钮——藏起来买家只会对着一屏
   // 授权码输入框发呆；改成明确写「暂未开通」并展开人工购买方式，外人照样能付费拿到码。
-  async function gatePayButton() {
-    let payReady = true;
-    try {
-      const health = await api('/api/health');
-      payReady = health.pay === true;
-    } catch (e) {
-      payReady = true; // 探测本身失败时保留按钮，点击后仍会有明确提示
-    }
-    if (payReady) return;
+  // 连不上后端（境内访问 workers.dev / github.io 被拦是真实场景）同样要走这条出口：
+  // 按钮点了必然失败，不如直接把人工购买通道摊开。
+  function lockToManual(message) {
     const btn = el('pwPay');
     if (btn) {
       btn.disabled = true;
-      btn.textContent = '在线收款暂未开通 · 用下方联系方式人工购买';
+      btn.textContent = message;
     }
     const alt = document.querySelector('.pw-alt');
     if (alt) alt.open = true;
+  }
+  async function gatePayButton() {
+    try {
+      const health = await api('/api/health');
+      if (health.pay === true) return;
+      lockToManual('在线收款暂未开通 · 用下方联系方式人工购买');
+    } catch (e) {
+      if (e.code === 'network_error') lockToManual('连不上授权服务 · 用下方联系方式人工购买');
+      // 其余是服务端明确报错：保留按钮，点击后仍会有逐项提示
+    }
   }
 
   // ---------- 付款后找回授权码 ----------
