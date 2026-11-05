@@ -103,12 +103,11 @@
   async function gatePayButton() {
     try {
       const health = await api('/api/health');
-      // 密钥配齐但商品价超出商户单笔额度，同样属于「现在线上收不了」——
-      // 老版本后端不返回 pay_amount_ok，undefined 按放行处理
+      // 密钥没配齐是第一位的原因；配齐了但额度收不了这个价，才是额度问题
       if (health.pay === true && health.pay_amount_ok !== false) return;
-      lockToManual(health.pay_amount_ok === false
-        ? '当前收款额度收不了 ¥99 · 用下方联系方式人工购买'
-        : '在线收款暂未开通 · 用下方联系方式人工购买');
+      lockToManual(health.pay !== true
+        ? '在线收款暂未开通 · 用下方联系方式人工购买'
+        : '当前收款额度收不了 ¥99 · 用下方联系方式人工购买');
     } catch (e) {
       if (e.code === 'network_error') lockToManual('连不上授权服务 · 用下方联系方式人工购买');
       // 其余是服务端明确报错：保留按钮，点击后仍会有逐项提示
