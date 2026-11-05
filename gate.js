@@ -4,6 +4,10 @@
   const PRICE_TEXT = '¥99 / 年';
   const CODE_KEY = 'sa_license_code';
   const DEVICE_KEY = 'sa_device_id';
+  const ORDER_KEY = 'sa_pay_order';
+  const ORDER_TTL_MS = 24 * 3600 * 1000;
+  const CODE_OK = /^[A-Z0-9][A-Z0-9-]{5,32}$/;
+  const TOKEN_OK = /^[a-z0-9]{8,64}$/;
 
   const el = id => document.getElementById(id);
   const enc = encodeURIComponent;
@@ -82,25 +86,105 @@
     runApp(catalog.config);
   }
 
-  // 收款是否可用只取决于服务端密钥是否配齐；未配齐时不给买家留一个点了就报错的按钮。
+  // 收款是否可用只取决于服务端密钥是否配齐。未配齐时不藏按钮——藏起来买家只会对着一屏
+  // 授权码输入框发呆；改成明确写「暂未开通」并展开人工购买方式，外人照样能付费拿到码。
   async function gatePayButton() {
+    let payReady = true;
     try {
       const health = await api('/api/health');
-      if (health.pay === true) return;
+      payReady = health.pay === true;
     } catch (e) {
-      return; // 探测本身失败时保留按钮，点击后仍会有明确提示
+      payReady = true; // 探测本身失败时保留按钮，点击后仍会有明确提示
     }
+    if (payReady) return;
     const btn = el('pwPay');
-    if (btn) btn.remove();
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '在线收款暂未开通 · 用下方联系方式人工购买';
+    }
     const alt = document.querySelector('.pw-alt');
     if (alt) alt.open = true;
   }
 
+  // ---------- 付款后找回授权码 ----------
+  // 买家在支付宝结果页直接关掉标签、或异步通知晚于页面轮询时，付款凭证（order_token）会丢。
+  // 把它存在本机，回到工作台就能凭它重新领一次码；重新领取仍走服务端查询，不信任本地状态。
+  function storedOrder() {
+    const fromUrl = (new URLSearchParams(location.search).get('order') || '').trim();
+    if (TOKEN_OK.test(fromUrl)) return { t: fromUrl, at: Date.now() };
+    let raw = null;
+    try { raw = JSON.parse(localStorage.getItem(ORDER_KEY) || 'null'); } catch (e) { raw = null; }
+    if (raw && TOKEN_OK.test(raw.t || '') && Date.now() - (raw.at || 0) < ORDER_TTL_MS) return raw;
+    return null;
+  }
+  function clearStoredOrder() { try { localStorage.removeItem(ORDER_KEY); } catch (e) {} }
+
+  function showRecover(message, buttonLabel) {
+    el('pwMsg').textContent = message;
+    let btn = el('pwRecover');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = 'pwRecover';
+      document.getElementById('pwMsg').insertAdjacentElement('afterend', btn);
+    }
+    btn.textContent = buttonLabel;
+    btn.disabled = false;
+    btn.style.cssText = 'width:100%;margin-top:10px;padding:11px;font-size:15px;font-weight:600;'
+      + 'color:#0b2b23;background:#7fe3c1;border:0;border-radius:8px;cursor:pointer';
+    btn.onclick = function () { showRecover('正在领取授权码…', '正在领取…'); btn.disabled = true; recoverOrder(true); };
+  }
+
+  async function recoverOrder(force) {
+    const order = storedOrder();
+    if (!order) return false;
+    let status;
+    try {
+      status = await api('/api/pay/status?order_token=' + enc(order.t));
+    } catch (e) {
+      if (force) el('pwMsg').textContent = tip(e.code);
+      return false;
+    }
+    if (status.state === 'PAID' && status.licenseCode) {
+      clearStoredOrder();
+      localStorage.setItem(CODE_KEY, status.licenseCode);
+      el('pwCode').value = status.licenseCode;
+      const btn = el('pwRecover');
+      if (btn) btn.remove();
+      showPay('支付成功，授权码 ' + status.licenseCode + '，正在进入工作台…');
+      await loadApp(status.licenseCode);
+      return true;
+    }
+    if (status.state === 'PAID') {
+      showRecover('支付已完成，授权码正在发放，稍等几秒再点一次。', '重新领取授权码');
+      return true;
+    }
+    if (status.state === 'CLOSED' || status.state === 'REFUNDED') {
+      clearStoredOrder();
+      return false;
+    }
+    if (force) showRecover('这笔订单还没查到付款完成。若已付款，点下面按钮重新领取。', '我已付款，领取授权码');
+    return true;
+  }
+
+  function urlCode() {
+    // 支付结果页会带 ?code= 回链到工作台：省掉「手抄授权码」这一步
+    const c = (new URLSearchParams(location.search).get('code') || '').trim().toUpperCase();
+    return CODE_OK.test(c) ? c : '';
+  }
+
   async function boot() {
     el('pwPrice').textContent = PRICE_TEXT;
-    gatePayButton();
-    const code = (localStorage.getItem(CODE_KEY) || '').trim();
-    if (!code) { showPay(''); return; }
+    await gatePayButton();
+    const deep = urlCode();
+    if (deep) localStorage.setItem(CODE_KEY, deep);
+    const code = deep || (localStorage.getItem(CODE_KEY) || '').trim();
+    el('pwCode').value = code || '';
+    if (!code) {
+      showPay('');
+      await recoverOrder(true);
+      return;
+    }
     try {
       const access = await api('/api/access?code=' + enc(code) + '&device=' + enc(deviceId()));
       if (!access.activated) {
@@ -113,6 +197,7 @@
         localStorage.removeItem(CODE_KEY);
       }
       showPay(tip(e.code));
+      await recoverOrder(true);
     }
   }
 
@@ -157,6 +242,8 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ item: 'standard' }),
       });
+      // 先落地再跳转：付款页一关，order_token 就是唯一的取码凭证
+      try { localStorage.setItem(ORDER_KEY, JSON.stringify({ t: order.order_token, at: Date.now() })); } catch (e) {}
       submitAlipayForm(order.payment_html);
     } catch (e) {
       el('pwMsg').textContent = tip(e.code);
